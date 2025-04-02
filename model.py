@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from helper import argmax, prepare_sequence, log_sum_exp
-
+from typing import Dict, List, Tuple
 torch.manual_seed(1)
 
 START_TAG = "<START>"
@@ -12,15 +12,21 @@ STOP_TAG = "<STOP>"
 
 class BiLSTM_CRF(nn.Module):
 
-    def __init__(self, vocab_size, tag_to_ix, embedding_dim, hidden_dim):
+    def __init__(
+            self, 
+            vocab_size:int, 
+            tag_to_ix:Dict[str,int], 
+            embedding_dim:int, 
+            hidden_dim:int
+    ):
         super(BiLSTM_CRF, self).__init__()
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
-        self.tag_to_ix = tag_to_ix
+        self.tag_to_ix= tag_to_ix
         self.tagset_size = len(tag_to_ix)
 
-        self.word_embeds = nn.Embedding(vocab_size, embedding_dim)
+        self.word_embeds = nn.Embedding(vocab_size, embedding_dim)  # every vocab has a embedding_dim dimension vector
         self.lstm = nn.LSTM(embedding_dim, hidden_dim // 2,
                             num_layers=1, bidirectional=True)
 
@@ -40,6 +46,10 @@ class BiLSTM_CRF(nn.Module):
         self.hidden = self.init_hidden()
 
     def init_hidden(self):
+        """example: two direction(forward and backward), batch_size = 1, each direction has 2 hidden dimensions.
+        h_0 = torch.randn(2, 1, 4 // 2), h refers to hidden state(output and next layer's input)
+        c_0 = torch.randn(2, 1, 4 // 2), c refers to cell state(long term memory)
+        """
         return (torch.randn(2, 1, self.hidden_dim // 2),
                 torch.randn(2, 1, self.hidden_dim // 2))
 
@@ -76,10 +86,10 @@ class BiLSTM_CRF(nn.Module):
 
     def _get_lstm_features(self, sentence):
         self.hidden = self.init_hidden()
-        embeds = self.word_embeds(sentence).view(len(sentence), 1, -1)
+        embeds = self.word_embeds(sentence).view(len(sentence), 1, -1)  # (sentence_length, 1, embedding_dim）, 1 because model deals with one sentence at a time
         lstm_out, self.hidden = self.lstm(embeds, self.hidden)
-        lstm_out = lstm_out.view(len(sentence), self.hidden_dim)
-        lstm_feats = self.hidden2tag(lstm_out)
+        lstm_out = lstm_out.view(len(sentence), self.hidden_dim)  # (sentence_length, hidden_dim), so every word has their own hidden state vector
+        lstm_feats = self.hidden2tag(lstm_out)  # so every word has their own tag
         return lstm_feats
 
     def _score_sentence(self, feats, tags):
@@ -138,11 +148,12 @@ class BiLSTM_CRF(nn.Module):
 
     def neg_log_likelihood(self, sentence, tags):
         feats = self._get_lstm_features(sentence)
-        forward_score = self._forward_alg(feats)
-        gold_score = self._score_sentence(feats, tags)
+        forward_score = self._forward_alg(feats)    #现在提取出来的特征矩阵跑出来的得分
+        gold_score = self._score_sentence(feats, tags)  #正确路径跑出来的得分
         return forward_score - gold_score
 
     def forward(self, sentence):  # dont confuse this with _forward_alg above.
+        #for example the sentence was like tensor([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
         # Get the emission scores from the BiLSTM
         lstm_feats = self._get_lstm_features(sentence)
 

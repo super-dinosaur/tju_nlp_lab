@@ -5,43 +5,48 @@ import torch.optim as optim
 
 from model import BiLSTM_CRF
 from helper import prepare_sequence
-
+from tqdm import tqdm
 torch.manual_seed(1)
 
 START_TAG = "<START>"
 STOP_TAG = "<STOP>"
-EMBEDDING_DIM = 5
-HIDDEN_DIM = 4
+EMBEDDING_DIM = 5   #the dimension of the word embedding vector
+HIDDEN_DIM = 4     #the dimension of the hidden state vector
 
 # Make up some training data
-training_data = [(
-    "the wall street journal reported today that apple corporation made money".split(),
-    "B I I I O O O B I O O".split()
-), (
-    "georgia tech is a university in georgia".split(),
-    "B I O O O O B".split()
-)]
+training_data = [
+    (
+        "the wall street journal reported today that apple corporation made money".split(),
+        "B I I I O O O B I O O".split()
+    ), 
+    (
+        "georgia tech is a university in georgia".split(),
+        "B I O O O O B".split()
+    )
+]
 
-word_to_ix = {}
+word_to_ix = {} #the abbreviation of word to index, meaning that the word is the key and the index is the value
 for sentence, tags in training_data:
     for word in sentence:
         if word not in word_to_ix:
-            word_to_ix[word] = len(word_to_ix)
+            word_to_ix[word] = len(word_to_ix)  #kinda like insertion(if the word is not in the word_to_ix, then add it to the word_to_ix)
 
 tag_to_ix = {"B": 0, "I": 1, "O": 2, START_TAG: 3, STOP_TAG: 4}
 
 model = BiLSTM_CRF(len(word_to_ix), tag_to_ix, EMBEDDING_DIM, HIDDEN_DIM)
-optimizer = optim.SGD(model.parameters(), lr=0.01, weight_decay=1e-4)
+optimizer = optim.SGD(model.parameters(), lr=0.01, weight_decay=1e-4)   #weight decay can prevent overfitting by regularizing the model
 
-# Check predictions before training
+# Check predictions before training, 就是先不训练，拿着sent直接跑一遍，tags是ground truth
 with torch.no_grad():
     precheck_sent = prepare_sequence(training_data[0][0], word_to_ix)
     precheck_tags = torch.tensor([tag_to_ix[t] for t in training_data[0][1]], dtype=torch.long)
-    print(model(precheck_sent))
+    print("----------------------before training----------------------")
+    print(f"model(precheck_sent): {model(precheck_sent)}") 
+    print(f"precheck_tags: {precheck_tags}")
+    print("----------------------training----------------------")
 
 # Make sure prepare_sequence from earlier in the LSTM section is loaded
-for epoch in range(
-        300):  # again, normally you would NOT do 300 epochs, it is toy data
+for epoch in tqdm(range(300)):  # again, normally you would NOT do 300 epochs, it is toy data
     for sentence, tags in training_data:
         # Step 1. Remember that Pytorch accumulates gradients.
         # We need to clear them out before each instance
