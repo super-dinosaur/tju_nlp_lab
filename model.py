@@ -33,10 +33,14 @@ class BiLSTM_CRF(nn.Module):
         # Maps the output of the LSTM into tag space.
         self.hidden2tag = nn.Linear(hidden_dim, self.tagset_size)
 
-        # Matrix of transition parameters.  Entry i,j is the score of
-        # transitioning *to* i *from* j.
+        """tips for transitions matrix:
+        1. Matrix of transition parameters.  
+        2. Entry i,j is the score of transitioning *to* i *from* j.
+        3. This matrix is a global variable, shared by all the words in the sentence.
+        """
         self.transitions = nn.Parameter(
-            torch.randn(self.tagset_size, self.tagset_size))
+            torch.randn(self.tagset_size, self.tagset_size)
+        )
 
         # These two statements enforce the constraint that we never transfer
         # to the start tag and we never transfer from the stop tag
@@ -62,7 +66,9 @@ class BiLSTM_CRF(nn.Module):
         # Wrap in a variable so that we will get automatic backprop
         forward_var = init_alphas
 
-        # Iterate through the sentence
+        """Iterate through the sentence.
+        in the example sentence, there're 11 words, so the feats.size() = [11,5]
+        """
         for feat in feats:
             alphas_t = []  # The forward tensors at this timestep
             for next_tag in range(self.tagset_size):
@@ -86,10 +92,16 @@ class BiLSTM_CRF(nn.Module):
 
     def _get_lstm_features(self, sentence):
         self.hidden = self.init_hidden()
-        embeds = self.word_embeds(sentence).view(len(sentence), 1, -1)  # (sentence_length, 1, embedding_dim）, 1 because model deals with one sentence at a time
+
+        # (sentence_length, 1, embedding_dim）, 1 because model deals with one sentence at a time
+        embeds = self.word_embeds(sentence).view(len(sentence), 1, -1)  
+
+        # (sentence_length, hidden_dim), so every word has their own hidden state vector
         lstm_out, self.hidden = self.lstm(embeds, self.hidden)
-        lstm_out = lstm_out.view(len(sentence), self.hidden_dim)  # (sentence_length, hidden_dim), so every word has their own hidden state vector
-        lstm_feats = self.hidden2tag(lstm_out)  # so every word has their own tag
+        lstm_out = lstm_out.view(len(sentence), self.hidden_dim)  
+
+        # (sentence_length, tagset_size), so every word has their own tag score
+        lstm_feats = self.hidden2tag(lstm_out)  
         return lstm_feats
 
     def _score_sentence(self, feats, tags):
@@ -152,7 +164,12 @@ class BiLSTM_CRF(nn.Module):
         gold_score = self._score_sentence(feats, tags)  #正确路径跑出来的得分
         return forward_score - gold_score
 
-    def forward(self, sentence):  # dont confuse this with _forward_alg above.
+    def forward(self, sentence):  
+        """ Tips for forward function:
+        forward function is used to get the best path and the score of the best path(test time)
+        _forward_alg is used to get the score of the sentence(train time)
+        """
+        # dont confuse this with _forward_alg above.
         #for example the sentence was like tensor([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
         # Get the emission scores from the BiLSTM
         lstm_feats = self._get_lstm_features(sentence)
